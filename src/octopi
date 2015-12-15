@@ -25,6 +25,10 @@ function execute_chroot_script() {
   rm -rfv filesystem
 }
 
+function execute_script() {
+  source $1
+}
+
 mkdir -p $OCTOPI_WORKSPACE
 mkdir -p $OCTOPI_MOUNT_PATH
 
@@ -35,8 +39,21 @@ pushd $OCTOPI_WORKSPACE
   if [ -e *.img ]; then  
     rm *.img
   fi
-  unzip $OCTOPI_ZIP_IMG
-  OCTOPI_IMG_PATH=`ls | grep .img`
+  [ -f "$OCTOPI_ZIP_IMG" ] && unzip $OCTOPI_ZIP_IMG
+
+  # if an additional pre-script is defined, execute that now
+  if [ -n "$OCTOPI_PRESCRIPT" ] && [ -f $OCTOPI_PRESCRIPT/build ]; then
+    echo "Injecting environment pre script from $OCTOPI_PRESCRIPT..."
+    execute_script $OCTOPI_PRESCRIPT/build
+  fi
+
+  # if building a variant, execute its pre-build script
+  if [ -n "$VARIANT_BASE" ] && [ -f $VARIANT_BASE/pre_build_script ]; then
+    echo "Injecting variant pre script from $VARIANT_BASE..."
+    execute_script $VARIANT_BASE/pre_build_script
+  fi
+  
+  [ -n "$OCTOPI_IMG_PATH" ] || OCTOPI_IMG_PATH=`ls | grep .img`
   export OCTOPI_BUILDBASE=$(basename $OCTOPI_IMG_PATH)
 
   if [ -n "$OCTOPI_IMAGE_ENLARGEROOT" ]
@@ -98,6 +115,18 @@ pushd $OCTOPI_WORKSPACE
   then
     # resize image to minimal size + provided size
     minimize_ext $OCTOPI_IMG_PATH 2 $OCTOPI_IMAGE_RESIZEROOT
+  fi
+  
+  # if building a variant, execute its post-build script
+  if [ -n "$VARIANT_BASE" ] && [ -f $VARIANT_BASE/post_build_script ]; then
+    echo "Injecting variant post script from $VARIANT_BASE..."
+    execute_script $VARIANT_BASE/post_build_script
+  fi
+
+  # if an additional post-script is defined, execute that now
+  if [ -n "$OCTOPI_POSTSCRIPT" ] && [ -f $OCTOPI_POSTSCRIPT/build ]; then
+    echo "Injecting environment post script from $OCTOPI_POSTSCRIPT..."
+    execute_script $OCTOPI_POSTSCRIPT/build
   fi
 popd
 
